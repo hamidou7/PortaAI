@@ -7,10 +7,78 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Github, Linkedin, FileText, Download, Moon, Sun, Settings } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { Progress } from '@/components/ui/progress'
+import { supabase } from '@/utils/supabase/client'
+import { useState, useEffect } from 'react'
+
+
 
 export default function Dashboard() {
-  const { user, loading, signOut } = useAuth()
+  const { user, signOut } = useAuth()
   const { theme, setTheme } = useTheme()
+
+  const [loading, setLoading] = useState<"github" | "linkedin" | null>(null)
+  const [connectedProviders, setConnectedProviders] = useState<string[]>([])
+  useEffect(() => {
+    const checkConnectedProviders = async () => {
+      if (!user) return
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('github_url, linkedin_url')
+        .eq('id', user.id)
+        .single()
+
+      if (error) {
+        console.error('Error fetching profile:', error)
+        return
+      }
+
+      if (data) {
+        const providers = []
+        if (data.github_url) providers.push('github')
+        if (data.linkedin_url) providers.push('linkedin')
+        console.log('✅ Connected providers:', providers)
+        setConnectedProviders(providers)
+      }
+    }
+
+    checkConnectedProviders()
+  }, [user])
+
+
+  const handleLogin = async (provider: "github" | "linkedin") => {
+    try {
+      console.log('🚀 [LoginForm] Tentative de connexion avec:', provider)
+      setLoading(provider)
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          scopes: provider === 'github' ? 'repo read:user user:email' : ''
+        }
+      })
+
+      console.log('📋 [LoginForm] Réponse OAuth:', {
+        error: error?.message,
+        provider,
+        url: data?.url,
+        hasData: !!data
+      })
+
+      if (error) throw error
+
+      console.log('✅ [LoginForm] Redirection OAuth initiée')
+    } catch (error) {
+      console.error('❌ [LoginForm] Erreur de connexion:', {
+        provider,
+        error,
+      })
+      alert(`Erreur de connexion avec ${provider}. Veuillez réessayer.`)
+    } finally {
+      setLoading(null)
+    }
+  }
 
   if (loading) {
     return (
@@ -62,12 +130,12 @@ export default function Dashboard() {
             <Progress value={33} className="mb-2" />
             <div className="grid gap-4 md:grid-cols-3">
               <div className="flex items-center gap-2">
-                <Github className="h-5 w-5 text-green-500" />
-                <span>GitHub connecté</span>
+                <Github className={`h-5 w-5 ${connectedProviders.includes('github') ? 'text-green-500' : 'text-muted-foreground'}`} />
+                <span>{connectedProviders.includes('github') ? 'GitHub connecté' : 'GitHub en attente'}</span>
               </div>
               <div className="flex items-center gap-2">
-                <Linkedin className="h-5 w-5 text-muted-foreground" />
-                <span>LinkedIn en attente</span>
+                <Linkedin className={`h-5 w-5 ${connectedProviders.includes('linkedin') ? 'text-green-500' : 'text-muted-foreground'}`} />
+                <span>{connectedProviders.includes('linkedin') ? 'LinkedIn connecté' : 'LinkedIn en attente'}</span>
               </div>
               <div className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-muted-foreground" />
@@ -85,9 +153,14 @@ export default function Dashboard() {
               <CardDescription>Importez vos projets et contributions</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full" variant="outline">
+              <Button
+                className="w-full"
+                variant="outline"
+                onClick={() => handleLogin("github")}
+                disabled={loading !== null || connectedProviders.includes('github')}
+              >
                 <Github className="mr-2 h-4 w-4" />
-                Synchroniser GitHub
+                {connectedProviders.includes('github') ? 'GitHub Synchronisé' : 'Synchroniser GitHub'}
               </Button>
             </CardContent>
           </Card>
@@ -98,9 +171,11 @@ export default function Dashboard() {
               <CardDescription>Ajoutez votre expérience professionnelle</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full" variant="outline">
+              <Button className="w-full" variant="outline" onClick={() => handleLogin("linkedin")}
+                disabled={loading !== null || connectedProviders.includes('linkedin')}
+              >
                 <Linkedin className="mr-2 h-4 w-4" />
-                Connecter LinkedIn
+                {connectedProviders.includes('linkedin') ? 'LinkedIn Connecté' : 'Connecter LinkedIn'}
               </Button>
             </CardContent>
           </Card>
