@@ -9,42 +9,33 @@ import { supabase } from "@/utils/supabase/client"
 import { useRouter } from "next/navigation"
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<"div">) {
-  const [loading, setLoading] = useState<"github" | "linkedin" | null>(null)
-  const router = useRouter()
+  const [loading, setLoading] = useState<"github" | "linkedin_oidc" | null>(null)
 
-  const handleLogin = async (provider: "github" | "linkedin") => {
+  const handleLogin = async (provider: "github" | "linkedin_oidc") => { // Remplace "linkedin" par "linkedin_oidc"
     try {
       console.log('🚀 [LoginForm] Tentative de connexion avec:', provider)
       setLoading(provider)
-
+  
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
-          scopes: provider === 'github' ? 'repo read:user user:email' : ''
+          scopes: provider === 'github' 
+            ? 'repo read:user user:email' 
+            : 'openid email profile' // Scopes pour LinkedIn OIDC
         }
       })
-
-      console.log('📋 [LoginForm] Réponse OAuth:', {
-        error: error?.message,
-        provider,
-        url: data?.url,
-        hasData: !!data
-      })
-
+  
       if (error) throw error
-
       console.log('✅ [LoginForm] Redirection OAuth initiée')
     } catch (error) {
-      console.error('❌ [LoginForm] Erreur de connexion:', {
-        provider,
-        error,
-      })
+      console.error('❌ [LoginForm] Erreur de connexion:', { provider, error })
       alert(`Erreur de connexion avec ${provider}. Veuillez réessayer.`)
     } finally {
       setLoading(null)
     }
   }
+  
 
   return (
     <div className={cn("grid gap-6", className)} {...props}>
@@ -72,11 +63,11 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
           <Button
             variant="outline"
             className="w-full h-11 relative font-medium"
-            onClick={() => handleLogin("linkedin")}
+            onClick={() => handleLogin("linkedin_oidc")}
             disabled={loading !== null}
           >
             <Linkedin className="mr-2 h-5 w-5" />
-            {loading === "linkedin" ? (
+            {loading === "linkedin_oidc" ? (
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-r-transparent" />
             ) : (
               "Continuer avec LinkedIn"

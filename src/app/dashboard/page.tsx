@@ -10,35 +10,57 @@ import { Progress } from '@/components/ui/progress'
 import { supabase } from '@/utils/supabase/client'
 import { useState, useEffect } from 'react'
 
-
+interface Profile {
+  id: string;
+  username: string;
+  email: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  github_url: string | null;
+  linkedin_url: string | null;
+  connected_providers: string[] | null;
+}
 
 export default function Dashboard() {
   const { user, signOut } = useAuth()
   const { theme, setTheme } = useTheme()
 
-  const [loading, setLoading] = useState<"github" | "linkedin" | null>(null)
+  const [loading, setLoading] = useState<"github" | "linkedin_oidc" | null>(null)
   const [connectedProviders, setConnectedProviders] = useState<string[]>([])
   useEffect(() => {
     const checkConnectedProviders = async () => {
-      if (!user) return
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('github_url, linkedin_url')
-        .eq('id', user.id)
-        .single()
-
-      if (error) {
-        console.error('Error fetching profile:', error)
+      if (!user) {
+        console.log("❌ No user found")
         return
       }
 
-      if (data) {
-        const providers = []
-        if (data.github_url) providers.push('github')
-        if (data.linkedin_url) providers.push('linkedin')
-        console.log('✅ Connected providers:', providers)
-        setConnectedProviders(providers)
+      console.log("🔍 Checking providers for user:", user.id)
+      
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select()
+          .eq('id', user.id)
+          .single()
+
+        if (error) {
+          console.error("❌ Error fetching profile:", error)
+          return
+        }
+
+        console.log("📊 Profile data:", data)
+
+        if (data) {
+          const providers = []
+          if (data.github_url) providers.push('github')
+          if (data.linkedin_url) providers.push('linkedin_oidc')
+          console.log('✅ Connected providers:', providers)
+          setConnectedProviders(providers)
+        } else {
+          console.log("❌ No profile found for user:", user.id)
+        }
+      } catch (error) {
+        console.error("❌ Unexpected error:", error)
       }
     }
 
@@ -46,7 +68,7 @@ export default function Dashboard() {
   }, [user])
 
 
-  const handleLogin = async (provider: "github" | "linkedin") => {
+  const handleLogin = async (provider: "github" | "linkedin_oidc") => {
     try {
       console.log('🚀 [LoginForm] Tentative de connexion avec:', provider)
       setLoading(provider)
@@ -134,8 +156,8 @@ export default function Dashboard() {
                 <span>{connectedProviders.includes('github') ? 'GitHub connecté' : 'GitHub en attente'}</span>
               </div>
               <div className="flex items-center gap-2">
-                <Linkedin className={`h-5 w-5 ${connectedProviders.includes('linkedin') ? 'text-green-500' : 'text-muted-foreground'}`} />
-                <span>{connectedProviders.includes('linkedin') ? 'LinkedIn connecté' : 'LinkedIn en attente'}</span>
+                <Linkedin className={`h-5 w-5 ${connectedProviders.includes('linkedin_oidc') ? 'text-green-500' : 'text-muted-foreground'}`} />
+                <span>{connectedProviders.includes('linkedin_oidc') ? 'LinkedIn connecté' : 'LinkedIn en attente'}</span>
               </div>
               <div className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-muted-foreground" />
@@ -171,11 +193,11 @@ export default function Dashboard() {
               <CardDescription>Ajoutez votre expérience professionnelle</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full" variant="outline" onClick={() => handleLogin("linkedin")}
-                disabled={loading !== null || connectedProviders.includes('linkedin')}
+              <Button className="w-full" variant="outline" onClick={() => handleLogin("linkedin_oidc")}
+                disabled={loading !== null || connectedProviders.includes('linkedin_oidc')}
               >
                 <Linkedin className="mr-2 h-4 w-4" />
-                {connectedProviders.includes('linkedin') ? 'LinkedIn Connecté' : 'Connecter LinkedIn'}
+                {connectedProviders.includes('linkedin_oidc') ? 'LinkedIn Connecté' : 'Connecter LinkedIn'}
               </Button>
             </CardContent>
           </Card>
