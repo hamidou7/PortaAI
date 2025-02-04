@@ -21,11 +21,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
         provider,
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
-          scopes: provider === 'github' ? 'repo read:user user:email' : '',
-          queryParams: provider === 'github' ? {
-            access_type: 'offline',
-            prompt: 'consent',
-          } : undefined,
+          scopes: provider === 'github' ? 'repo read:user user:email' : ''
         }
       })
 
@@ -38,11 +34,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
       if (error) throw error
 
-      // Si nous avons une URL de redirection, redirigeons l'utilisateur
-      if (data?.url) {
-        console.log('✅ [LoginForm] Redirection vers:', data.url)
-        window.location.href = data.url
-      }
+      console.log('✅ [LoginForm] Redirection OAuth initiée')
     } catch (error) {
       console.error('❌ [LoginForm] Erreur de connexion:', {
         provider,
