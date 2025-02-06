@@ -27,6 +27,8 @@ export default function Dashboard() {
 
   const [loading, setLoading] = useState<"github" | "linkedin_oidc" | null>(null)
   const [connectedProviders, setConnectedProviders] = useState<string[]>([])
+  const [hasCVData, setHasCVData] = useState(false)
+
   useEffect(() => {
     const checkConnectedProviders = async () => {
       if (!user) {
@@ -37,28 +39,30 @@ export default function Dashboard() {
       console.log("🔍 Checking providers for user:", user.id)
       
       try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select()
-          .eq('id', user.id)
-          .single()
+        const [profileData, cvData] = await Promise.all([
+          supabase.from('profiles').select().eq('id', user.id).single(),
+          supabase.from('cv_data').select().eq('user_id', user.id).single()
+        ])
 
-        if (error) {
-          console.error("❌ Error fetching profile:", error)
+        if (profileData.error) {
+          console.error("❌ Error fetching profile:", profileData.error)
           return
         }
 
-        console.log("📊 Profile data:", data)
+        console.log("📊 Profile data:", profileData.data)
 
-        if (data) {
+        if (profileData.data) {
           const providers = []
-          if (data.github_url) providers.push('github')
-          if (data.linkedin_url) providers.push('linkedin_oidc')
+          if (profileData.data.github_url) providers.push('github')
+          if (profileData.data.linkedin_url) providers.push('linkedin_oidc')
           console.log('✅ Connected providers:', providers)
           setConnectedProviders(providers)
         } else {
           console.log("❌ No profile found for user:", user.id)
         }
+
+        // Check if CV data exists
+        setHasCVData(!cvData.error && cvData.data !== null)
       } catch (error) {
         console.error("❌ Unexpected error:", error)
       }
@@ -149,7 +153,10 @@ export default function Dashboard() {
             <CardDescription>Complétez les étapes pour générer votre portfolio</CardDescription>
           </CardHeader>
           <CardContent>
-            <Progress value={33} className="mb-2" />
+            <Progress 
+              value={((connectedProviders.length + (hasCVData ? 1 : 0)) / 3) * 100} 
+              className="mb-2" 
+            />
             <div className="grid gap-4 md:grid-cols-3">
               <div className="flex items-center gap-2">
                 <Github className={`h-5 w-5 ${connectedProviders.includes('github') ? 'text-green-500' : 'text-muted-foreground'}`} />
@@ -160,8 +167,8 @@ export default function Dashboard() {
                 <span>{connectedProviders.includes('linkedin_oidc') ? 'LinkedIn connecté' : 'LinkedIn en attente'}</span>
               </div>
               <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-muted-foreground" />
-                <span>CV en attente</span>
+                <FileText className={`h-5 w-5 ${hasCVData ? 'text-green-500' : 'text-muted-foreground'}`} />
+                <span>{hasCVData ? 'CV complété' : 'CV en attente'}</span>
               </div>
             </div>
           </CardContent>
@@ -215,6 +222,20 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Actions rapides */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Actions rapides</CardTitle>
+            <CardDescription>Gérez votre profil et vos documents</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <Button variant="outline" className="w-full justify-start" onClick={() => window.location.href = '/dashboard/cv'}>
+              <FileText className="mr-2 h-4 w-4" />
+              Gérer mon CV
+            </Button>
+          </CardContent>
+        </Card>
 
         {/* Personnalisation */}
         <Card>
