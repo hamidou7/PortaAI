@@ -122,7 +122,6 @@ export function CVForm({ initialData, onSubmit }: {
           console.log(" CVForm: Formulaire invalide");
           console.log(" Erreurs de validation:", JSON.stringify(formErrors, null, 2));
           
-          // Afficher un toast avec les erreurs principales
           const errorMessages = Object.entries(formErrors)
             .map(([key, value]) => `${key}: ${value.message}`)
             .join('\n');
@@ -150,17 +149,21 @@ export function CVForm({ initialData, onSubmit }: {
             variant: "destructive",
           });
         }
-      }} className="space-y-8">
-        <PersonalInfoForm control={form.control} />
-        <EducationForm control={form.control} />
-        <ExperienceForm control={form.control} />
-        <SkillsForm control={form.control} />
-        <LanguagesForm control={form.control} />
-        <CertificationsForm control={form.control} />
+      }} className="w-full max-w-[95%] sm:max-w-[85%] md:max-w-2xl mx-auto space-y-8 p-4 sm:p-6 bg-white rounded-lg shadow-sm">
+        <div className="space-y-6">
+          <PersonalInfoForm control={form.control} />
+          <EducationForm control={form.control} />
+          <ExperienceForm control={form.control} />
+          <SkillsForm control={form.control} />
+          <LanguagesForm control={form.control} />
+          <CertificationsForm control={form.control} />
+        </div>
         
-        <Button type="submit">
-          Enregistrer le CV
-        </Button>
+        <div className="flex justify-end pt-4 border-t">
+          <Button type="submit" className="w-full sm:w-auto">
+            Enregistrer le CV
+          </Button>
+        </div>
       </form>
     </Form>
   )

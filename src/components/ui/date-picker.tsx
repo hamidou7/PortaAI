@@ -4,7 +4,7 @@ import * as React from "react"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { Calendar as CalendarIcon } from "lucide-react"
-import { DayPicker } from "react-day-picker"
+import { DayPicker, type CustomComponents } from "react-day-picker"
 import { Control, FieldValues, Path, useController } from "react-hook-form"
 
 import { cn } from "@/lib/utils"
@@ -24,6 +24,11 @@ interface DatePickerProps<T extends FieldValues> {
   placeholder?: string
 }
 
+type ExtendedCustomComponents = CustomComponents & {
+  PrevIcon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  NextIcon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+};
+
 export function DatePicker<T extends FieldValues>({
   control,
   name,
@@ -32,6 +37,10 @@ export function DatePicker<T extends FieldValues>({
   className,
   placeholder = "Sélectionner une date",
 }: DatePickerProps<T>) {
+  if (!name) {
+    throw new Error("The 'name' prop is required for DatePicker.");
+  }
+  
   const { field } = useController({
     name,
     control,
@@ -98,9 +107,9 @@ export function DatePicker<T extends FieldValues>({
             day_hidden: "invisible",
           }}
           components={{
-            IconLeft: ({ ...props }) => <ChevronLeftIcon className="h-4 w-4" />,
-            IconRight: ({ ...props }) => <ChevronRightIcon className="h-4 w-4" />,
-          }}
+            PrevIcon: ({ ...props }) => <ChevronLeftIcon className="h-4 w-4" {...props} />,  
+            NextIcon: ({ ...props }) => <ChevronRightIcon className="h-4 w-4" {...props} />,  
+          } as ExtendedCustomComponents}
         />
       </PopoverContent>
     </Popover>
