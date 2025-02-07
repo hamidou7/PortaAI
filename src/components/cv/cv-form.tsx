@@ -17,7 +17,7 @@ import { useEffect } from "react"
 const cvFormSchema = z.object({
   personalInfo: z.object({
     fullName: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
-    email: z.string().email("Email invalide"),
+    email: z.string().email("Email invalide").optional().or(z.literal("")),
     phone: z.string().optional(),
     location: z.string().optional(),
     title: z.string().min(2, "Le titre doit contenir au moins 2 caractères"),
@@ -84,37 +84,73 @@ export function CVForm({ initialData, onSubmit }: {
     },
   });
 
-  const onSubmitHandler = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    console.log(" Formulaire soumis");
-    
-    const formData = form.getValues();
-    console.log(" Données du formulaire:", formData);
-
-    try {
-      console.log(" Appel de onSubmit...");
-      await onSubmit(formData);
-      console.log(" onSubmit terminé avec succès");
-    } catch (error) {
-      console.error(" Erreur dans onSubmit:", error);
-      toast({
-        title: "Erreur",
-        description: "Une erreur est survenue lors de l'enregistrement.",
-        variant: "destructive",
-      });
-    }
-  };
-
   useEffect(() => {
-    if (initialData && Object.keys(initialData).length > 0) {
+    if (initialData) {
       console.log(" Mise à jour du formulaire avec:", initialData);
-      form.reset(initialData, { keepDefaultValues: true });
+      // Convertir les dates string en objets Date
+      const formattedData = {
+        ...initialData,
+        education: initialData.education?.map(edu => ({
+          ...edu,
+          startDate: edu.startDate ? new Date(edu.startDate) : undefined,
+          endDate: edu.endDate ? new Date(edu.endDate) : undefined,
+        })) || [],
+        experience: initialData.experience?.map(exp => ({
+          ...exp,
+          startDate: exp.startDate ? new Date(exp.startDate) : undefined,
+          endDate: exp.endDate ? new Date(exp.endDate) : undefined,
+        })) || [],
+        certifications: initialData.certifications?.map(cert => ({
+          ...cert,
+          date: cert.date ? new Date(cert.date) : undefined,
+        })) || [],
+      };
+      form.reset(formattedData);
     }
-  }, [initialData]);
+  }, [initialData, form]);
 
   return (
     <Form {...form}>
-      <form onSubmit={onSubmitHandler} className="space-y-8">
+      <form onSubmit={async (e) => {
+        e.preventDefault();
+        console.log(" CVForm: Début de la soumission");
+        
+        const isValid = await form.trigger();
+        const formErrors = form.formState.errors;
+        
+        if (!isValid) {
+          console.log(" CVForm: Formulaire invalide");
+          console.log(" Erreurs de validation:", JSON.stringify(formErrors, null, 2));
+          
+          // Afficher un toast avec les erreurs principales
+          const errorMessages = Object.entries(formErrors)
+            .map(([key, value]) => `${key}: ${value.message}`)
+            .join('\n');
+          
+          toast({
+            title: "Validation échouée",
+            description: "Veuillez corriger les erreurs suivantes:\n" + errorMessages,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        const formData = form.getValues();
+        console.log(" CVForm: Données du formulaire:", formData);
+
+        try {
+          console.log(" CVForm: Appel de onSubmit");
+          await onSubmit(formData);
+          console.log(" CVForm: onSubmit terminé avec succès");
+        } catch (error) {
+          console.error(" CVForm: Erreur dans onSubmit:", error);
+          toast({
+            title: "Erreur",
+            description: "Une erreur est survenue lors de l'enregistrement.",
+            variant: "destructive",
+          });
+        }
+      }} className="space-y-8">
         <PersonalInfoForm control={form.control} />
         <EducationForm control={form.control} />
         <ExperienceForm control={form.control} />
@@ -122,10 +158,7 @@ export function CVForm({ initialData, onSubmit }: {
         <LanguagesForm control={form.control} />
         <CertificationsForm control={form.control} />
         
-        <Button 
-          type="submit"
-          onClick={() => console.log(" Bouton submit cliqué")}
-        >
+        <Button type="submit">
           Enregistrer le CV
         </Button>
       </form>

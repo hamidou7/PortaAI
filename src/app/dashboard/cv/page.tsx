@@ -15,34 +15,35 @@ export default function CVPage() {
   const { toast } = useToast()
   const router = useRouter()
   const [initialData, setInitialData] = useState<Partial<CVFormValues>>()
+
+  const loadCVData = async () => {
+    if (!user) return;
+
+    console.log("🔍 Vérification des données Supabase...");
+
+    const { data, error } = await supabase
+      .from('cv_data')
+      .select('*')
+      .eq('user_id', user.id)
+      .single();
+
+    console.log("📤 Réponse brute de Supabase:", { data, error });
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('⚠️ Erreur lors du chargement des données:', error);
+      return;
+    }
+
+    if (data?.cv_data) {
+      console.log("✅ Données existantes trouvées");
+      setInitialData(data.cv_data as Partial<CVFormValues>);
+    } else {
+      console.log("⚠️ Aucune donnée trouvée, initialisation vide.");
+      setInitialData({});
+    }
+  };
+
   useEffect(() => {
-    const loadCVData = async () => {
-      if (!user) return;
-
-      console.log("🔍 Vérification des données Supabase...");
-
-      const { data, error } = await supabase
-        .from('cv_data')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-
-      console.log("📤 Réponse brute de Supabase:", { data, error });
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('⚠️ Erreur lors du chargement des données:', error);
-        return;
-      }
-
-      if (data?.cv_data) {
-        console.log("✅ Données existantes trouvées");
-        setInitialData(data.cv_data as Partial<CVFormValues>);
-      } else {
-        console.log("⚠️ Aucune donnée trouvée, initialisation vide.");
-        setInitialData({});
-      }
-    };
-
     loadCVData();
   }, [user]);
 
@@ -91,25 +92,41 @@ export default function CVPage() {
       const convertedData = convertDatesToISOString(data);
       console.log("📝 Données à sauvegarder:", convertedData);
 
+    
       let error;
       if (existingData) {
         console.log("🔄 Mise à jour du CV existant...");
-        ({ error } = await supabase
+        const { data: updatedData, error: updateError } = await supabase
           .from('cv_data')
           .update({
             cv_data: convertedData,
             updated_at: new Date().toISOString(),
+            user_id: user.id
           })
-          .eq('user_id', user.id));
+          .eq('user_id', user.id)
+          .select()
+          .single();
+        
+        error = updateError;
+        if (!error && updatedData) {
+          setInitialData(updatedData.cv_data as Partial<CVFormValues>);
+        }
       } else {
         console.log("➕ Création d'un nouveau CV...");
-        ({ error } = await supabase
+        const { data: insertedData, error: insertError } = await supabase
           .from('cv_data')
           .insert({
             user_id: user.id,
             cv_data: convertedData,
             updated_at: new Date().toISOString(),
-          }));
+          })
+          .select()
+          .single();
+        
+        error = insertError;
+        if (!error && insertedData) {
+          setInitialData(insertedData.cv_data as Partial<CVFormValues>);
+        }
       }
 
       if (error) {
@@ -123,10 +140,6 @@ export default function CVPage() {
       }
 
       console.log('✅ CV sauvegardé avec succès');
-      toast({
-        title: "Succès",
-        description: "Votre CV a été sauvegardé avec succès",
-      });
     } catch (error) {
       console.error('❌ Erreur inattendue:', error);
       toast({
@@ -157,15 +170,30 @@ export default function CVPage() {
         <CVForm
           initialData={initialData}
           onSubmit={async (data) => {
-            console.log("📩 Page CV: Début de onSubmit");
-            console.log("📦 Page CV: Données reçues:", data);
+            console.log("🚀 Page CV: Début du traitement");
+            console.log("📦 Page CV: Données reçues:", JSON.stringify(data, null, 2));
+            
             try {
               console.log("🔄 Page CV: Appel de handleSubmit");
               await handleSubmit(data);
               console.log("✅ Page CV: handleSubmit terminé avec succès");
+              
+              // Recharger les données après la sauvegarde réussie
+              console.log("🔄 Page CV: Rechargement des données");
+              await loadCVData();
+              console.log("✅ Page CV: Données rechargées avec succès");
+              
+              toast({
+                title: "Succès",
+                description: "Votre CV a été sauvegardé avec succès",
+              });
             } catch (error) {
               console.error("❌ Page CV: Erreur dans handleSubmit:", error);
-              throw error; // Propager l'erreur au composant CVForm
+              toast({
+                title: "Erreur",
+                description: "Une erreur est survenue lors de la sauvegarde",
+                variant: "destructive",
+              });
             }
           }}
         />
