@@ -9,17 +9,8 @@ import { useTheme } from 'next-themes'
 import { Progress } from '@/components/ui/progress'
 import { supabase } from '@/utils/supabase/client'
 import { useState, useEffect } from 'react'
+import { generatePortfolioContent } from '@/lib/openai'
 
-interface Profile {
-  id: string;
-  username: string;
-  email: string | null;
-  avatar_url: string | null;
-  bio: string | null;
-  github_url: string | null;
-  linkedin_url: string | null;
-  connected_providers: string[] | null;
-}
 
 export default function Dashboard() {
   const { user, signOut } = useAuth()
@@ -37,7 +28,7 @@ export default function Dashboard() {
       }
 
       console.log("🔍 Checking providers for user:", user.id)
-      
+
       try {
         const [profileData, cvData] = await Promise.all([
           supabase.from('profiles').select().eq('id', user.id).single(),
@@ -74,37 +65,99 @@ export default function Dashboard() {
 
   const handleLogin = async (provider: "github" | "linkedin_oidc") => {
     try {
-      console.log('🚀 [LoginForm] Tentative de connexion avec:', provider)
-      setLoading(provider)
-
+      setLoading(provider);
+  
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
-          scopes: provider === 'github' ? 'repo read:user user:email' : ''
+          scopes: provider === 'github' ? 'repo read:user user:email' : 'r_liteprofile r_emailaddress',
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         }
-      })
-
-      console.log('📋 [LoginForm] Réponse OAuth:', {
-        error: error?.message,
-        provider,
-        url: data?.url,
-        hasData: !!data
-      })
-
-      if (error) throw error
-
-      console.log('✅ [LoginForm] Redirection OAuth initiée')
+      });
+  
+      if (error) throw error;
+  
+      // Mettre à jour le profil après connexion
+      if (data?.user) {
+        const { data: userData } = await supabase
+          .from('profiles')
+          .update({
+            [provider === 'github' ? 'github_data' : 'linkedin_data']: data.user.user_metadata,
+            [provider === 'github' ? 'github_username' : 'linkedin_username']: data.user.user_metadata.user_name
+          })
+          .eq('id', data.user.id)
+          .select();
+      }
+  
     } catch (error) {
-      console.error('❌ [LoginForm] Erreur de connexion:', {
-        provider,
-        error,
-      })
-      alert(`Erreur de connexion avec ${provider}. Veuillez réessayer.`)
+      console.error('Erreur de connexion:', error);
+      alert(`Erreur lors de la connexion ${provider}`);
     } finally {
-      setLoading(null)
+      setLoading(null);
     }
-  }
+  };
+  const handleAIGeneration = async () => {
+    try {
+      if (!user) {
+        alert('Veuillez vous connecter avant de générer un portfolio');
+        return;
+      }
+  
+      // 1. Récupération des données avec le bon typage
+      const { data, error: fetchError } = await supabase
+        .from('profiles')
+        .select(`
+          *,
+          github_data,
+          linkedin_data,
+          cv_data (
+            id,
+            cv_data,
+            updated_at
+          )
+        `)
+        .eq('id', user.id)
+        .single();
+  
+      if (fetchError || !data) throw new Error(fetchError?.message || 'Aucune donnée trouvée');
+  
+      // 2. Vérification du CV
+      const cvData = data.cv_data;
+      if (!cvData || cvData.length === 0) {
+        throw new Error('Aucun CV trouvé - Veuillez uploader un CV');
+      }
+  
+      // 3. Génération IA avec les données validées
+      const generatedContent = await generatePortfolioContent({
+        ...data,
+        cv_data: cvData[0]
+      });
+  
+      // 4. Sauvegarde avec vérification de type
+      const { error: upsertError } = await supabase
+        .from('portfolios')
+        .upsert({
+          user_id: user.id,
+          generated_content: generatedContent,
+          edited_content: null,
+          ai_model: 'gpt-4-turbo',
+          status: 'draft',
+          cv_data_id: cvData[0].id // Accès au premier élément du array
+        });
+  
+      if (upsertError) throw upsertError;
+  
+      window.location.href = `/dashboard/editor`;
+  
+    } catch (error) {
+      console.error("Erreur de génération IA:", error);
+      alert(`Erreur lors de la génération: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
+    }
+  };
 
   if (loading) {
     return (
@@ -153,9 +206,9 @@ export default function Dashboard() {
             <CardDescription>Complétez les étapes pour générer votre portfolio</CardDescription>
           </CardHeader>
           <CardContent>
-            <Progress 
-              value={((connectedProviders.length + (hasCVData ? 1 : 0)) / 3) * 100} 
-              className="mb-2" 
+            <Progress
+              value={((connectedProviders.length + (hasCVData ? 1 : 0)) / 3) * 100}
+              className="mb-2"
             />
             <div className="grid gap-4 md:grid-cols-3">
               <div className="flex items-center gap-2">
@@ -254,6 +307,22 @@ export default function Dashboard() {
                 Modèles de Portfolio
               </Button>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Génération IA</CardTitle>
+            <CardDescription>Générez votre contenu optimisé</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              className="w-full"
+              onClick={() => handleAIGeneration()}
+              disabled={connectedProviders.length < 1 && !hasCVData}
+            >
+              ✨ Générer mon portfolio avec l'IA
+            </Button>
           </CardContent>
         </Card>
       </main>
